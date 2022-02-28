@@ -74,7 +74,21 @@ class ReflexAgent(Agent):
         newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
 
         "*** YOUR CODE HERE ***"
-        return successorGameState.getScore()
+        foodList = newFood.asList()
+        foodPossible = float('inf')
+        negativeInfinity = -float('inf')
+
+        for food in foodList:
+            foodPossible = min(foodPossible, manhattanDistance(newPos, food))
+        
+        # Return small value if the ghost is near Pacman
+        for agent in successorGameState.getGhostPositions():
+            if (manhattanDistance(newPos, agent) < 1): 
+                return negativeInfinity
+
+        total = successorGameState.getScore() + 1.0 / foodPossible
+        return total
+
 
 def scoreEvaluationFunction(currentGameState):
     """
@@ -135,7 +149,30 @@ class MinimaxAgent(MultiAgentSearchAgent):
         Returns whether or not the game state is a losing state
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # util.raiseNotDefined()
+        def getMinValue(state, agentIndex, treeDepth):
+            legalActions = state.getLegalActions(agentIndex)
+
+            if legalActions == []: 
+                return self.evaluationFunction(state)
+            
+            # Determine ghost and pacman mode
+            if agentIndex != state.getNumAgents() - 1: 
+                return min(getMinValue(state.generateSuccessor(agentIndex, i), agentIndex+1, treeDepth) for i in legalActions)
+            else:
+                return min(getMaxValue(state.generateSuccessor(agentIndex, i), treeDepth) for i in legalActions)
+        
+        # Reach last depth here
+        def getMaxValue(state, treeDepth):
+            legalActions = state.getLegalActions(0)
+            if legalActions == [] or treeDepth == self.depth:
+                return self.evaluationFunction(state)
+
+            return max(getMinValue(state.generateSuccessor(0, i), 1, treeDepth + 1) for i in legalActions)
+            
+        actions = gameState.getLegalActions(0)
+        path = max(actions, key=lambda i: getMinValue(gameState.generateSuccessor(0, i), 1, 1))
+        return path
 
 class AlphaBetaAgent(MultiAgentSearchAgent):
     """
@@ -147,7 +184,54 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
         Returns the minimax action using self.depth and self.evaluationFunction
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # util.raiseNotDefined()
+        def getMinValue(state, agentIndex, treeDepth, x, y):
+            legalActions = state.getLegalActions(agentIndex)
+            if legalActions == []:
+                return self.evaluationFunction(state)
+
+            z = float('inf')
+            for i in legalActions:
+                newState = state.generateSuccessor(agentIndex, i)
+
+                # Check to see whether it's the last ghost
+                if agentIndex == state.getNumAgents() - 1:
+                    newMove = getMaxValue(newState, treeDepth, x, y)
+                else:
+                    newMove = getMinValue(newState, agentIndex + 1, treeDepth, x, y)
+
+                z = min(z, newMove)
+                if z < x:
+                    return z
+                y = min(y, z)
+            return z
+
+        def getMaxValue(state, treeDepth, x, y):
+            legalActions = state.getLegalActions(0)
+            if legalActions == [] or treeDepth == self.depth:
+                return self.evaluationFunction(state)
+
+            z = -float('inf')
+            if treeDepth == 0:
+                bestMove = legalActions[0]
+            for i in legalActions:
+                newState = state.generateSuccessor(0, i)
+                newMove = getMinValue(newState, 1, treeDepth + 1, x, y)
+                if newMove > z:
+                    z = newMove
+                    if treeDepth == 0:
+                        bestMove = i
+                if z > y:
+                    return z
+                x = max(x, z)
+
+            if treeDepth == 0:
+                return bestMove
+            return z
+
+        bestMove = getMaxValue(gameState, 0, -float('inf'), float('inf'))
+        return bestMove
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
     """
@@ -162,7 +246,33 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         legal moves.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # util.raiseNotDefined()
+        def getMaxValue(state, treeDepth):
+            legalActions = state.getLegalActions(0)
+            if legalActions == [] or treeDepth == self.depth:
+                return self.evaluationFunction(state)
+
+            v = max(expected(state.generateSuccessor(0, i), 1, treeDepth + 1) for i in legalActions)
+            return v
+
+        def expected(state, agentIndex, treeDepth):
+            legalActions = state.getLegalActions(agentIndex)
+            if legalActions == []:
+                return self.evaluationFunction(state)
+
+            pr = 1.0 / len(legalActions)
+            z = 0
+            for i in legalActions:
+                newState = state.generateSuccessor(agentIndex, i)
+                if agentIndex == state.getNumAgents() - 1:
+                    z += getMaxValue(newState, treeDepth) * pr
+                else:
+                    z += expected(newState, agentIndex + 1, treeDepth) * pr
+            return z
+
+        legalActions = gameState.getLegalActions()
+        bestMove = max(legalActions, key=lambda i: expected(gameState.generateSuccessor(0, i), 1, 1))
+        return bestMove
 
 def betterEvaluationFunction(currentGameState):
     """
@@ -171,8 +281,53 @@ def betterEvaluationFunction(currentGameState):
 
     DESCRIPTION: <write something here so we know what you did>
     """
+    # In some cases its better to not move when a dot may be besides because not doing any action is the same as
+    # with other actions. That's why choosen several actions have same evaluation
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    # util.raiseNotDefined()
+    # Infinity = float('inf')
+    # if currentGameState.isLose(): 
+    #     return -Infinity
+    # if currentGameState.isWin():  
+    #     return Infinity
+        
+    # foods = currentGameState.getFood()
+    # foodList = foods.asList()
+    # stateGhost = currentGameState.getGhostStates()
+    # pacman = currentGameState.getPacmanPosition()
+
+    # closestFood = min(manhattanDistance(i, pacman) for i in foodList)
+    # eat = sum([(manhattanDistance(i.getPosition(), pacman) < 3) for i in stateGhost])
+    # notEat = sum([(i.scaredTimer == 0) for i in stateGhost])
+
+    # return currentGameState.getScore() + 1.0 / closestFood + 1.0 *eat + 1.0 / (notEat + 0.5)
+
+    # Infinity = float('inf')
+    # if currentGameState.isLose(): 
+    #     return -Infinity
+    # if currentGameState.isWin():  
+    #     return Infinity
+        
+    foods = currentGameState.getFood()
+    foodList = foods.asList()
+    # stateGhost = currentGameState.getGhostStates()
+    pacman = currentGameState.getPacmanPosition()
+
+    closestFood = min(manhattanDistance(pacman, i) for i in foodList) if foodList else 0.5
+    return 1.0 / closestFood + currentGameState.getScore()
+
+    # position = currentGameState.getPacmanPosition() == pacman
+    # foods = currentGameState.getFood().asList() = foodList
+    # closestFoodDis = min(manhattanDistance(position, food) for food in foods) if foods else 0.5
+    # score = currentGameState.getScore()
+
+    # '''
+    #   Sometimes pacman will stay put even when there's a dot right besides, because 
+    #   stop action has the same priority with other actions, so might be chosen when
+    #   multiple actions have the same evaluation, upon which we can improve maybe.
+    # '''
+    # evaluation = 1.0 / closestFoodDis + score
+    # return evaluation
 
 # Abbreviation
 better = betterEvaluationFunction
